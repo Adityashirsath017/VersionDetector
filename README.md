@@ -50,7 +50,6 @@ Add your screenshots to the screenshots folder and reference them here:
 
 ![Dashboard Preview](screenshots/dashboard.png)
 
-![Repository Report Preview](screenshots/repo-report.png)
 
 ![Bulk Analysis Preview](screenshots/bulk-analysis.png)
 
