@@ -1,11 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Star, GitFork, ExternalLink, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
 import TechIcon from './TechIcon';
 
-export default function ProjectCardList({ projects, onSearch, darkMode }) {
+export default function ProjectCardList({ projects, onSearch, darkMode, loading = false, error = '' }) {
   const [query, setQuery] = useState('');
-  const [expandedId, setExpandedId] = useState(projects[0]?.id || 1);
+  const [expandedId, setExpandedId] = useState(projects[0]?.id || null);
   const [showAll, setShowAll] = useState(false); // Top 3 by default
+
+  // Keep the expanded card in sync when a new search replaces the list.
+  useEffect(() => {
+    setExpandedId(projects[0]?.id || null);
+  }, [projects]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -35,6 +40,22 @@ export default function ProjectCardList({ projects, onSearch, darkMode }) {
           Search Repositories
         </button>
       </form>
+
+      {error && (
+        <div className="text-xs px-4 py-3 rounded-xl border border-red-500/40 bg-red-500/10 text-red-300" role="alert">
+          {error}
+        </div>
+      )}
+      {loading && (
+        <div className="text-xs px-4 py-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-300">
+          Searching GitHub repositories…
+        </div>
+      )}
+      {!loading && !error && projects.length === 0 && (
+        <div className="text-xs px-4 py-3 rounded-xl border border-slate-500/30 text-slate-400">
+          No repositories yet. Search a keyword, topic, or a GitHub repo like facebook/react above.
+        </div>
+      )}
 
       {/* Top Status Line */}
       <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
@@ -77,8 +98,8 @@ export default function ProjectCardList({ projects, onSearch, darkMode }) {
                       <p className={`text-xs mt-1 max-w-xl ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{info.description}</p>
                       
                       <div className="flex items-center gap-4 text-xs text-slate-400 mt-2">
-                        <span className="text-amber-400 flex items-center gap-1">⭐ {(info.stars / 1000).toFixed(1)}k</span>
-                        <span className="flex items-center gap-1"><GitFork className="w-3 h-3" /> {(info.forks / 1000).toFixed(1)}k</span>
+                        <span className="text-amber-400 flex items-center gap-1">⭐ {((info.stars || 0) / 1000).toFixed(1)}k</span>
+                        <span className="flex items-center gap-1"><GitFork className="w-3 h-3" /> {((info.forks || 0) / 1000).toFixed(1)}k</span>
                         <span className="text-slate-500 text-[11px]">Updated {info.updated}</span>
                       </div>
                     </div>

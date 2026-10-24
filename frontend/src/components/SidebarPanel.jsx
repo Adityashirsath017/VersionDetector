@@ -1,89 +1,88 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
 import { Layers, Search, ExternalLink, RefreshCw } from 'lucide-react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
+import { apiUrl } from '../api';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
-// Authentic Language Versions Datasets for 1-minute Rotation
-const languageDataList = [
-  {
-    language: 'Python',
-    totalAnalyzed: 200,
-    labels: ['Python 3.12', 'Python 3.11', 'Python 3.10', 'Python 3.9', 'Others'],
-    counts: [70, 60, 40, 20, 10],
-    percentages: ['35.0%', '30.0%', '20.0%', '10.0%', '5.0%'],
-    colors: ['#3b82f6', '#22c55e', '#eab308', '#64748b', '#a855f7']
-  },
-  {
-    language: 'Node.js',
-    totalAnalyzed: 200,
-    labels: ['Node 20.x (LTS)', 'Node 18.x (LTS)', 'Node 16.x', 'Node 22.x', 'Others'],
-    counts: [84, 66, 30, 14, 6],
-    percentages: ['42.0%', '33.0%', '15.0%', '7.0%', '3.0%'],
-    colors: ['#22c55e', '#06b6d4', '#eab308', '#a855f7', '#64748b']
-  },
-  {
-    language: 'Java',
-    totalAnalyzed: 200,
-    labels: ['Java 21 (LTS)', 'Java 17 (LTS)', 'Java 11', 'Java 8', 'Others'],
-    counts: [76, 70, 36, 14, 4],
-    percentages: ['38.0%', '35.0%', '18.0%', '7.0%', '2.0%'],
-    colors: ['#f97316', '#3b82f6', '#10b981', '#ef4444', '#64748b']
-  },
-  {
-    language: 'Go',
-    totalAnalyzed: 200,
-    labels: ['Go 1.22', 'Go 1.21', 'Go 1.20', 'Go 1.19', 'Others'],
-    counts: [90, 64, 28, 12, 6],
-    percentages: ['45.0%', '32.0%', '14.0%', '6.0%', '3.0%'],
-    colors: ['#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#64748b']
-  },
-  {
-    language: 'TypeScript',
-    totalAnalyzed: 200,
-    labels: ['TS 5.4', 'TS 5.3', 'TS 5.0', 'TS 4.9', 'Others'],
-    counts: [80, 60, 36, 16, 8],
-    percentages: ['40.0%', '30.0%', '18.0%', '8.0%', '4.0%'],
-    colors: ['#3b82f6', '#06b6d4', '#22c55e', '#a855f7', '#64748b']
-  },
-  {
-    language: 'PHP',
-    totalAnalyzed: 200,
-    labels: ['PHP 8.3', 'PHP 8.2', 'PHP 8.1', 'PHP 7.4', 'Others'],
-    counts: [72, 68, 36, 16, 8],
-    percentages: ['36.0%', '34.0%', '18.0%', '8.0%', '4.0%'],
-    colors: ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#64748b']
-  }
-];
+// Languages rotated every 60 seconds. The numbers shown for each language
+// come from the live backend (/api/language-versions), never from a
+// hardcoded dataset — a previous version showed fixed counts as if live.
+const rotatingLanguages = ['Python', 'Node.js', 'Java', 'Go', 'TypeScript', 'PHP'];
+const chartColors = ['#3b82f6', '#22c55e', '#eab308', '#64748b', '#a855f7', '#f97316'];
+
+function formatStars(stars) {
+  return `${((stars || 0) / 1000).toFixed(1)}k`;
+}
 
 export default function SidebarPanel({ activeTab, onSearch, onSelectLang, darkMode }) {
   const [langIndex, setLangIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState(60);
+  const [distribution, setDistribution] = useState(null);
+  const [latestRepos, setLatestRepos] = useState([]);
+  const [sidebarError, setSidebarError] = useState('');
+  const [sidebarLoading, setSidebarLoading] = useState(false);
+
+  const language = rotatingLanguages[langIndex];
+
+  const fetchDistribution = useCallback(async (lang) => {
+    setSidebarLoading(true);
+    setSidebarError('');
+    try {
+      const res = await axios.get(apiUrl(`/api/language-versions?lang=${encodeURIComponent(lang)}&limit=50`));
+      const repos = res.data?.data || [];
+      const counts = {};
+      repos.forEach((repo) => {
+        const version = repo.detectedVersion || 'Not specified';
+        counts[version] = (counts[version] || 0) + 1;
+      });
+      const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      const total = repos.length || 1;
+      setDistribution({
+        language: lang,
+        totalAnalyzed: repos.length,
+        labels: sorted.map(([version]) => version),
+        counts: sorted.map(([, count]) => count),
+        percentages: sorted.map(([, count]) => `${((count / total) * 100).toFixed(1)}%`),
+        colors: chartColors,
+      });
+      setLatestRepos(repos.slice(0, 3));
+    } catch (e) {
+      setDistribution(null);
+      setLatestRepos([]);
+      setSidebarError(e.response?.data?.error || 'Could not load live version data. Make sure the backend is running.');
+    } finally {
+      setSidebarLoading(false);
+    }
+  }, []);
 
   // 1-Minute Auto-Rotation & Timer Interval
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          setLangIndex((current) => (current + 1) % languageDataList.length);
+          setLangIndex((current) => (current + 1) % rotatingLanguages.length);
           return 60;
         }
         return prev - 1;
       });
     }, 1000);
-
     return () => clearInterval(timer);
   }, []);
 
-  const currentData = languageDataList[langIndex];
+  // Fetch live data whenever the rotated language changes.
+  useEffect(() => {
+    fetchDistribution(language);
+  }, [language, fetchDistribution]);
 
   const doughnutData = {
-    labels: currentData.labels,
+    labels: distribution?.labels?.length ? distribution.labels : ['No Data'],
     datasets: [
       {
-        data: currentData.counts,
-        backgroundColor: currentData.colors,
+        data: distribution?.counts?.length ? distribution.counts : [1],
+        backgroundColor: chartColors,
         borderWidth: 0,
       },
     ],
@@ -161,23 +160,32 @@ export default function SidebarPanel({ activeTab, onSearch, onSelectLang, darkMo
         </div>
       )}
 
-      {/* 2. Version Distribution Overview (1-Minute Auto-Updating Card) */}
+      {/* 2. Version Distribution Overview (1-Minute Auto-Updating Card, live data) */}
       <div className={`border rounded-xl p-4 shadow-xl ${darkMode ? 'bg-[#0e1626] border-[#1e2d4a]' : 'bg-white border-slate-200'}`}>
         <div className="flex items-center justify-between mb-3">
           <h4 className="text-xs font-semibold text-purple-400">
-            Version Distribution ({currentData.language})
+            Version Distribution ({language})
           </h4>
           <span className="text-[10px] bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded-full flex items-center gap-1 font-mono">
             <RefreshCw className="w-2.5 h-2.5 animate-spin" /> {timeLeft}s
           </span>
         </div>
 
+        {sidebarError && (
+          <div className="text-xs px-3 py-2 rounded-lg border border-red-500/40 bg-red-500/10 text-red-300 mb-3" role="alert">
+            {sidebarError}
+          </div>
+        )}
+        {sidebarLoading && !distribution && (
+          <div className="text-xs text-slate-400 mb-3">Loading live version data…</div>
+        )}
+
         <div className="flex items-center gap-4">
           <div className="relative w-32 h-32 flex-shrink-0">
             <Doughnut data={doughnutData} options={doughnutOptions} />
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
               <span className={`text-base font-extrabold ${darkMode ? 'text-white' : 'text-slate-800'}`}>
-                {currentData.totalAnalyzed}
+                {distribution?.totalAnalyzed ?? 0}
               </span>
               <span className="text-[9px] text-slate-400 leading-tight">
                 Repositories<br />Analyzed
@@ -186,40 +194,42 @@ export default function SidebarPanel({ activeTab, onSearch, onSelectLang, darkMo
           </div>
 
           <div className="space-y-1.5 text-[11px] w-full">
-            {currentData.labels.map((label, idx) => (
+            {(distribution?.labels || []).map((label, idx) => (
               <div key={label} className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: currentData.colors[idx] }} />
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: chartColors[idx % chartColors.length] }} />
                 <span className={`truncate max-w-[90px] ${darkMode ? 'text-slate-200' : 'text-slate-700'}`}>{label}</span>
                 <span className="text-slate-400 font-mono text-[10px] ml-auto">
-                  {currentData.percentages[idx]}
+                  {distribution.percentages[idx]}
                 </span>
               </div>
             ))}
+            {distribution && distribution.labels.length === 0 && (
+              <div className="text-slate-400">No version data for this language yet.</div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* 3. Latest Detected Repositories Table */}
+      {/* 3. Latest Detected Repositories Table (live, from the same fetch) */}
       <div className={`border rounded-xl p-4 shadow-xl text-xs ${darkMode ? 'bg-[#0e1626] border-[#1e2d4a]' : 'bg-white border-slate-200'}`}>
         <div className="flex justify-between items-center mb-3">
           <span className={`font-semibold ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Latest Detected Repositories</span>
-          <button className="text-[11px] text-cyan-400 hover:underline">View All</button>
+          <button className="text-[11px] text-cyan-400 hover:underline" onClick={() => onSelectLang(language)}>View All</button>
         </div>
 
         <div className="space-y-2">
-          {[
-            { id: 1, name: 'django / django', stars: '59.2k', ver: 'Python 3.11.4' },
-            { id: 2, name: 'psf / requests', stars: '49.3k', ver: 'Python 3.10+' },
-            { id: 3, name: 'pallets / flask', stars: '63.1k', ver: 'Python 3.11.2' },
-          ].map((r) => (
-            <div key={r.id} className={`flex items-center justify-between py-1.5 border-b ${darkMode ? 'border-[#1e2d4a]/50' : 'border-slate-100'}`}>
-              <span className="text-slate-400 w-4">{r.id}</span>
-              <span className={`font-medium truncate max-w-[110px] ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>{r.name}</span>
-              <span className="text-amber-400 text-[10px]">⭐ {r.stars}</span>
-              <span className="text-emerald-400 font-mono text-[10px]">{r.ver}</span>
+          {latestRepos.map((r, idx) => (
+            <div key={r.id || idx} className={`flex items-center justify-between py-1.5 border-b ${darkMode ? 'border-[#1e2d4a]/50' : 'border-slate-100'}`}>
+              <span className="text-slate-400 w-4">{idx + 1}</span>
+              <a href={r.url} target="_blank" rel="noreferrer" className={`font-medium truncate max-w-[110px] hover:underline ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>{r.name}</a>
+              <span className="text-amber-400 text-[10px]">⭐ {formatStars(r.stars)}</span>
+              <span className="text-emerald-400 font-mono text-[10px]">{r.detectedVersion}</span>
               <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
             </div>
           ))}
+          {latestRepos.length === 0 && !sidebarLoading && (
+            <div className="text-slate-400">No repositories to show yet.</div>
+          )}
         </div>
       </div>
     </div>

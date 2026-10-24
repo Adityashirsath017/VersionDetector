@@ -7,6 +7,7 @@ import {
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
 import TechIcon from './TechIcon';
+import { apiUrl } from '../api';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -31,7 +32,7 @@ export default function BulkDetectorDashboard({ darkMode }) {
 
     try {
       const response = await axios.get(
-        `http://localhost:5000/api/language-versions?lang=${encodeURIComponent(lang)}&limit=${limit}`
+        apiUrl(`/api/language-versions?lang=${encodeURIComponent(lang)}&limit=${limit}`)
       );
       setRepos(response.data.data || []);
       setCurrentPage(1);
