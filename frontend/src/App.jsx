@@ -4,44 +4,34 @@ import { Target, Moon, Sun, Zap } from 'lucide-react';
 import ProjectCardList from './components/ProjectCardList';
 import SidebarPanel from './components/SidebarPanel';
 import BulkDetectorDashboard from './components/BulkDetectorDashboard';
-
-const mockProjects = [
-  {
-    id: 1,
-    info: { name: 'facebook / react', description: 'A declarative, efficient, and flexible JavaScript library for building user interfaces.', stars: 215000, forks: 45600, updated: '2 days ago', verified: true, url: 'https://github.com/facebook/react' },
-    languagesBreakdown: [{ name: 'JavaScript', percentage: 60.3 }, { name: 'TypeScript', percentage: 22.7 }, { name: 'CSS', percentage: 10.5 }, { name: 'HTML', percentage: 6.5 }],
-    detectedStack: [
-      { name: 'React', version: 'v18.2.0', source: 'package.json', snippet: '"react": "18.2.0"', type: 'react' },
-      { name: 'Node.js', version: '>=18.0.0', source: 'package.json', snippet: '"engines": { "node": ">=18.0.0" }', type: 'nodejs' },
-      { name: 'TypeScript', version: 'v5.0.4', source: 'package.json', snippet: '"typescript": "^5.0.4"', type: 'typescript' },
-      { name: 'Docker', version: '20-alpine', source: 'Dockerfile', snippet: 'FROM node:20-alpine', type: 'docker' },
-      { name: 'ESLint', version: 'v8.57.0', source: '.eslintrc.json', snippet: '"eslint": "8.57.0"', type: 'eslint' }
-    ]
-  },
-  {
-    id: 2,
-    info: { name: 'vercel / next.js', description: 'The React Framework for the Web', stars: 114000, forks: 22100, updated: '1 day ago', verified: true, url: 'https://github.com/vercel/next.js' },
-    languagesBreakdown: [{ name: 'TypeScript', percentage: 80 }, { name: 'JavaScript', percentage: 20 }],
-    detectedStack: [{ name: 'React', version: 'v18.2.0', source: 'package.json', snippet: '"react": "^18.2.0"', type: 'react' }]
-  },
-  {
-    id: 3,
-    info: { name: 'microsoft / typescript', description: 'TypeScript is a superset of JavaScript that compiles to clean JavaScript output.', stars: 92000, forks: 18700, updated: '3 days ago', verified: true, url: 'https://github.com/microsoft/typescript' },
-    languagesBreakdown: [{ name: 'TypeScript', percentage: 100 }],
-    detectedStack: [{ name: 'Node.js', version: '>=16.0.0', source: 'package.json', snippet: '"node": ">=16.0.0"', type: 'nodejs' }]
-  }
-];
+import { apiUrl } from './api';
 
 export default function App() {
   const [darkMode, setDarkMode] = useState(true);
   const [activeTab, setActiveTab] = useState('bulk'); // Default to Bulk Detector mode as per screenshot
-  const [projects, setProjects] = useState(mockProjects);
+  // No mock projects: the list starts empty and only shows real API results.
+  // A failed search shows an error instead of silently keeping fake data.
+  const [projects, setProjects] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
 
   const handleSearch = async (query) => {
+    setIsSearching(true);
+    setSearchError('');
     try {
-      const res = await axios.get(`http://localhost:5000/api/analyze-single-repo?target=${encodeURIComponent(query)}&count=20`);
-      if (res.data?.projects) setProjects(res.data.projects);
-    } catch (e) {}
+      const res = await axios.get(apiUrl(`/api/analyze-single-repo?target=${encodeURIComponent(query)}&count=20`));
+      if (res.data?.projects) {
+        setProjects(res.data.projects);
+      } else {
+        setProjects([]);
+        setSearchError('No projects were returned for this search.');
+      }
+    } catch (e) {
+      setProjects([]);
+      setSearchError(e.response?.data?.error || 'Failed to fetch repositories. Make sure the backend is running.');
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   return (
@@ -115,7 +105,7 @@ export default function App() {
           /* TAB 1: 15-20 Projects Deep Inspection View */
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             <div className="lg:col-span-8 space-y-6">
-              <ProjectCardList projects={projects} onSearch={handleSearch} darkMode={darkMode} />
+              <ProjectCardList projects={projects} onSearch={handleSearch} darkMode={darkMode} loading={isSearching} error={searchError} />
             </div>
             <div className="lg:col-span-4">
               <SidebarPanel activeTab={activeTab} onSearch={handleSearch} onSelectLang={handleSearch} darkMode={darkMode} />
